@@ -570,7 +570,6 @@ const C = {
   blue: "#60a5fa",
 };
 
-const NAV_TABS = ["workout", "maxes", "rpe"];
 
 // ─── HELPERS: completion checks ─────────────────────────────────────────────
 function isDayComplete(w, d, doneMap) {
@@ -726,16 +725,7 @@ export default function App() {
     return weightForRPE(orm, r, rpe);
   })();
 
-  const btn = (active, onClick, children, extraStyle = {}) => (
-    <button onClick={onClick} style={{
-      background: active ? C.accent : C.surface,
-      border: `2px solid ${active ? C.accent : C.border}`,
-      color: active ? "#0e0e14" : C.text,
-      borderRadius: 10, padding: "14px 0", fontSize: 14, fontWeight: 700,
-      cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
-      ...extraStyle,
-    }}>{children}</button>
-  );
+  
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'DM Mono','Courier New',monospace" }}>
