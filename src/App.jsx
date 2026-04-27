@@ -570,7 +570,6 @@ const C = {
   blue: "#60a5fa",
 };
 
-
 // ─── HELPERS: completion checks ─────────────────────────────────────────────
 function isDayComplete(w, d, doneMap) {
   const exs = PROGRAM[w]?.[d]?.exercises || [];
@@ -725,7 +724,32 @@ export default function App() {
     return weightForRPE(orm, r, rpe);
   })();
 
-  
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  function quickCompleteDay() {
+    const updates = {};
+    exs.forEach((ex, ei) => {
+      const setCount = parseInt(ex.sets) || 0;
+      for (let si = 0; si < setCount; si++) {
+        updates[`${week}-${day}-${ei}-${si}`] = true;
+      }
+    });
+    setDone(p => ({ ...p, ...updates }));
+  }
+
+  function resetAllData() {
+    setDone({});
+    setWeights({});
+    setNotes({});
+    setRpeLogged({});
+    localStorage.removeItem("cb_done");
+    localStorage.removeItem("cb_weights");
+    localStorage.removeItem("cb_notes");
+    localStorage.removeItem("cb_rpe_logged");
+    setConfirmReset(false);
+    setWeek(1);
+    setDay(1);
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'DM Mono','Courier New',monospace" }}>
@@ -886,7 +910,42 @@ export default function App() {
 
           {/* Session header */}
           <div style={{ paddingTop: 20, marginBottom: 16 }}>
-            <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.16em", marginBottom: 4 }}>WEEK {week} · DAY {day}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+              <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.16em" }}>WEEK {week} · DAY {day}</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {/* Quick Complete */}
+                {totalSets > 0 && !currentDayComplete && (
+                  <button onClick={quickCompleteDay} style={{
+                    background: `${C.accent}18`, border: `1px solid ${C.accent}50`,
+                    color: C.accent, padding: "6px 12px", borderRadius: 8,
+                    fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                    letterSpacing: "0.06em", whiteSpace: "nowrap",
+                  }}>⚡ QUICK COMPLETE</button>
+                )}
+                {/* Reset button */}
+                {!confirmReset ? (
+                  <button onClick={() => setConfirmReset(true)} style={{
+                    background: "transparent", border: `1px solid rgba(248,113,113,0.3)`,
+                    color: "rgba(248,113,113,0.6)", padding: "6px 10px", borderRadius: 8,
+                    fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                  }}>↺ RESET</button>
+                ) : (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <span style={{ fontSize: 10, color: "rgba(248,113,113,0.8)" }}>Sure?</span>
+                    <button onClick={resetAllData} style={{
+                      background: "rgba(248,113,113,0.15)", border: `1px solid rgba(248,113,113,0.5)`,
+                      color: "#f87171", padding: "6px 10px", borderRadius: 8,
+                      fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                    }}>YES</button>
+                    <button onClick={() => setConfirmReset(false)} style={{
+                      background: C.surface, border: `1px solid ${C.border}`,
+                      color: C.muted, padding: "6px 10px", borderRadius: 8,
+                      fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                    }}>NO</button>
+                  </div>
+                )}
+              </div>
+            </div>
             <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: totalSets > 0 ? 12 : 0 }}>
               {session?.label || "Rest Day"}
             </div>
