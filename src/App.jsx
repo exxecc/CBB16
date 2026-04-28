@@ -847,14 +847,6 @@ export default function App() {
   }
   const RPE_VALUES = [5,5.5,6,6.5,7,7.5,8,8.5,9,9.5,10];
 
-  // ── Shared UI primitives ──
-  const Inp = ({ value, onChange, placeholder, big, type="number" }) => (
-    <input type={type} placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)}
-      style={{ width:"100%", boxSizing:"border-box", background:C.bg,
-        border:`2px solid ${value ? C.accent+"60" : C.border}`,
-        color:C.text, padding: big ? "14px 16px" : "10px 14px", borderRadius:10,
-        fontSize: big ? 22 : 15, fontWeight:700, fontFamily:"inherit", outline:"none" }} />
-  );
 
   const Label = ({ children }) => (
     <div style={{ fontSize:10, color:C.muted, letterSpacing:"0.14em", marginBottom:8 }}>{children}</div>
