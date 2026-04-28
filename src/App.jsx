@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 
 // ─── PROGRAM DATA ────────────────────────────────────────────────────────────
 const PROGRAM = {
@@ -561,7 +561,6 @@ const C = {
   bg: "#0e0e14",
   surface: "#16161f",
   border: "rgba(255,255,255,0.08)",
-  borderActive: "rgba(255,255,255,0.18)",
   text: "#e8e4da",
   muted: "rgba(232,228,218,0.38)",
   dim: "rgba(232,228,218,0.2)",
@@ -571,6 +570,11 @@ const C = {
   red: "#f87171",
   purple: "#a78bfa",
 };
+
+// Defined outside component so it is stable across renders
+function Label({ children }) {
+  return <div style={{ fontSize:10, color:C.muted, letterSpacing:"0.14em", marginBottom:8 }}>{children}</div>;
+}
 
 const BODY_MEASUREMENTS = [
   "waist","neck","shoulder","chest",
@@ -701,7 +705,7 @@ export default function App() {
   useEffect(() => { try { localStorage.setItem("cb_notes", JSON.stringify(notes)); } catch {} }, [notes]);
   useEffect(() => { try { localStorage.setItem("cb_rpe_logged", JSON.stringify(rpeLogged)); } catch {} }, [rpeLogged]);
   useEffect(() => { try { localStorage.setItem("cb_workout_log", JSON.stringify(workoutLog)); } catch {} }, [workoutLog]);
-  useEffect(() => { try { localStorage.setItem("cb_comp_date", compDate); } catch {} }, [compDate]);
+  useEffect(() => { try { localStorage.setItem("cb_comp_date", compDate); } catch { /* quota exceeded */ } }, [compDate]);
   useEffect(() => { try { localStorage.setItem("cb_body_weight", JSON.stringify(bodyWeight)); } catch {} }, [bodyWeight]);
   useEffect(() => { try { localStorage.setItem("cb_measurements", JSON.stringify(measurements)); } catch {} }, [measurements]);
   useEffect(() => { setMaxInp({ squat: maxes.squat||"", bench: maxes.bench||"", deadlift: maxes.deadlift||"" }); }, [maxes]);
@@ -750,33 +754,32 @@ export default function App() {
   const session   = PROGRAM[week]?.[day];
   const exs       = session?.exercises || [];
   const totalSets = exs.reduce((a, e) => a + (parseInt(e.sets)||0), 0);
-  const doneSets  = exs.reduce((total, _ex, ei) => {
-    const sc = parseInt(exs[ei].sets)||0;
+  const doneSets  = exs.reduce((total, ex, ei) => {
+    const sc = parseInt(ex.sets)||0;
     for (let si = 0; si < sc; si++) { if (done[`${week}-${day}-${ei}-${si}`]) total++; }
     return total;
   }, 0);
 
   const hasMaxes          = ["squat","bench","deadlift"].some(l => parseFloat(maxes[l]) > 0);
   const phase             = getPhase(week);
-  const pColor            = PHASES[phase].color;
   const currentDayComplete  = isDayComplete(week, day, done);
   const currentWeekComplete = isWeekComplete(week, done);
 
-  // ── Volume ──
-  const dayVol   = calcDayVolume(week, day, weights, done, PROGRAM);
-  const weekVol  = calcWeekVolume(week, weights, done, PROGRAM);
-  const totalVol = calcTotalVolume(weights, done, PROGRAM);
+  // ── Memoized volume (only recalculates when weights or done changes) ──
+  const dayVol   = useMemo(() => calcDayVolume(week, day, weights, done, PROGRAM),   [week, day, weights, done]);
+  const weekVol  = useMemo(() => calcWeekVolume(week, weights, done, PROGRAM),        [week, weights, done]);
+  const totalVol = useMemo(() => calcTotalVolume(weights, done, PROGRAM),             [weights, done]);
 
-  // ── Competition countdown ──
-  function compCountdown() {
+  // ── Memoized competition countdown ──
+  const countdown = useMemo(() => {
     if (!compDate) return null;
-    const now = new Date(); const comp = new Date(compDate);
+    const now = new Date();
+    const comp = new Date(compDate);
     const diffMs = comp - now;
     if (diffMs < 0) return { past: true };
     const totalDays = Math.floor(diffMs / 86400000);
     return { weeks: Math.floor(totalDays / 7), days: totalDays % 7, totalDays };
-  }
-  const countdown = compCountdown();
+  }, [compDate]);
 
   // ── Helpers ──
   function toggleSet(ei, si) {
@@ -794,7 +797,11 @@ export default function App() {
 
   function saveMaxes() {
     const m = {};
-    ["squat","bench","deadlift"].forEach(l => { const v = parseFloat(maxInp[l]); if (!isNaN(v) && v > 0) m[l] = v; });
+    ["squat","bench","deadlift"].forEach(l => {
+      const v = parseFloat(maxInp[l]);
+      // Sanity bounds: must be between 1 and 2000 lbs
+      if (!isNaN(v) && v > 0 && v <= 2000) m[l] = v;
+    });
     setMaxes(m); setTab("workout");
   }
 
@@ -814,12 +821,15 @@ export default function App() {
 
   function saveBodyWeight() {
     const v = parseFloat(bwInput);
-    if (isNaN(v) || v <= 0) return;
+    // Sanity bounds: must be between 50 and 1500 lbs
+    if (isNaN(v) || v < 50 || v > 1500) return;
     setBodyWeight(p => [{ date: measDate, value: v }, ...p]);
     setBwInput("");
   }
 
   function saveMeasurements() {
+    const hasAny = BODY_MEASUREMENTS.some(k => measInput[k] && parseFloat(measInput[k]) > 0);
+    if (!hasAny) return;
     const entry = { date: measDate, ...measInput };
     setMeasurements(p => [entry, ...p]);
     setMeasInput({});
@@ -846,11 +856,6 @@ export default function App() {
     return "#ef4444";
   }
   const RPE_VALUES = [5,5.5,6,6.5,7,7.5,8,8.5,9,9.5,10];
-
-
-  const Label = ({ children }) => (
-    <div style={{ fontSize:10, color:C.muted, letterSpacing:"0.14em", marginBottom:8 }}>{children}</div>
-  );
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg, color:C.text, fontFamily:"'DM Mono','Courier New',monospace" }}>
@@ -899,7 +904,7 @@ export default function App() {
         <div style={{ paddingTop:32, paddingBottom:16, borderBottom:`1px solid ${C.border}` }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
             <div>
-              <div style={{ fontSize:9, letterSpacing:"0.2em", color:pColor, fontWeight:700, marginBottom:4 }}>
+              <div style={{ fontSize:9, letterSpacing:"0.2em", color:PHASES[phase].color, fontWeight:700, marginBottom:4 }}>
                 CALGARY BARBELL · 16 WEEK
               </div>
               <h1 style={{ margin:0, fontSize:24, fontWeight:700, letterSpacing:"-0.02em" }}>TRAINING LOG</h1>
