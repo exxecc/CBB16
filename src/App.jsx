@@ -2051,38 +2051,58 @@ export default function App() {
                   </div>
 
                   {/* Perceived RPE selector */}
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                      <div style={{ fontSize: 10, color: C.dim, letterSpacing: "0.12em" }}>PERCEIVED RPE</div>
-                      {loggedRpe !== null && (
-                        <div style={{
-                          fontSize: 12, fontWeight: 700, color: rpeColor(loggedRpe),
-                          background: `${rpeColor(loggedRpe)}18`,
-                          border: `1px solid ${rpeColor(loggedRpe)}50`,
-                          padding: "2px 9px", borderRadius: 20,
-                        }}>
-                          {loggedRpe} RPE
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                      {RPE_VALUES.map(r => {
-                        const selected = loggedRpe === r;
-                        const col = rpeColor(r);
-                        return (
-                          <button key={r} onClick={() => setExRpe(ei, selected ? null : r)} style={{
-                            padding: "7px 0", width: 42, borderRadius: 8, fontSize: 12, fontWeight: 700,
-                            cursor: "pointer", fontFamily: "inherit", transition: "all 0.12s",
-                            border: `2px solid ${selected ? col : C.border}`,
-                            background: selected ? `${col}22` : C.bg,
-                            color: selected ? col : C.dim,
-                          }}>
-                            {r % 1 === 0 ? r : r.toFixed(1)}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+<div style={{ marginBottom: 12 }}>
+  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+    <div style={{ fontSize: 10, color: C.dim, letterSpacing: "0.12em" }}>
+      PERCEIVED RPE
+    </div>
+
+    {loggedRpe !== null && (
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 700,
+          color: rpeColor(loggedRpe),
+          background: `${rpeColor(loggedRpe)}18`,
+          border: `1px solid ${rpeColor(loggedRpe)}50`,
+          padding: "2px 9px",
+          borderRadius: 20,
+        }}
+      >
+        {loggedRpe} RPE
+      </div>
+    )}
+  </div>
+
+  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+    {RPE_VALUES.map((r) => {
+      const selected = loggedRpe === r;
+      const col = rpeColor(r);
+
+      return (
+        <button
+          key={r}
+          onClick={() => setExRpe(ei, r === loggedRpe ? null : r)}
+          style={{
+            padding: "7px 0",
+            width: 42,
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+            fontFamily: "inherit",
+            transition: "all 0.12s",
+            border: `2px solid ${selected ? col : C.border}`,
+            background: selected ? `${col}22` : C.bg,
+            color: selected ? col : C.dim,
+          }}
+        >
+          {r}
+        </button>
+      );
+    })}
+  </div>
+</div>
 
                   {/* Set buttons */}
                   {setCount > 0 && (
