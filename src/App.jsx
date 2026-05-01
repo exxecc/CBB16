@@ -670,16 +670,93 @@ export default function App() {
   const [maxInp, setMaxInp] = useState({ squat: "", bench: "", deadlift: "" });
   const [confirmReset, setConfirmReset] = useState(false);
 
-  // ── Stopwatch ──
-  const [swRunning, setSwRunning]   = useState(false);
-  const [swSeconds, setSwSeconds]   = useState(0);
-  const [swPaused, setSwPaused]     = useState(false);  // true = workout started but paused
-  const swRef = useRef(null);
+  // ── Stopwatch ── (timestamp-based so it stays accurate when tab is backgrounded)
+  const [swRunning, setSwRunning] = useState(false);
+  const [swSeconds, setSwSeconds] = useState(0);
+  const [swPaused, setSwPaused]   = useState(false);
+  const swStartRef    = useRef(null); // Date.now() when started/resumed
+  const swAccumRef    = useRef(0);    // seconds accumulated before last pause
+  const swRafRef      = useRef(null); // requestAnimationFrame handle
 
-  // ── Rest timer ──
+  // ── Rest timer ── (timestamp-based)
   const [timerSec, setTimerSec]     = useState(null);
   const [timerTotal, setTimerTotal] = useState(0);
-  const timerRef = useRef(null);
+  const timerEndRef   = useRef(null); // Date.now() when timer should reach 0
+  const timerRafRef   = useRef(null); // requestAnimationFrame handle
+
+  // Stopwatch tick — runs via rAF, recalculates from wall-clock on every frame
+  useEffect(() => {
+    function tick() {
+      const elapsed = swAccumRef.current + Math.floor((Date.now() - swStartRef.current) / 1000);
+      setSwSeconds(elapsed);
+      swRafRef.current = requestAnimationFrame(tick);
+    }
+    if (swRunning) {
+      swStartRef.current = Date.now();
+      swRafRef.current = requestAnimationFrame(tick);
+    } else {
+      cancelAnimationFrame(swRafRef.current);
+    }
+    return () => cancelAnimationFrame(swRafRef.current);
+  }, [swRunning]);
+
+  function startWorkout() {
+    swAccumRef.current = 0;
+    setSwSeconds(0);
+    setSwRunning(true);
+    setSwPaused(false);
+  }
+  function pauseWorkout() {
+    // Snapshot accumulated seconds so we can resume from here
+    swAccumRef.current += Math.floor((Date.now() - swStartRef.current) / 1000);
+    setSwRunning(false);
+    setSwPaused(true);
+  }
+  function resumeWorkout() { setSwRunning(true); setSwPaused(false); }
+
+  function saveWorkout() {
+    const duration = swRunning
+      ? swAccumRef.current + Math.floor((Date.now() - swStartRef.current) / 1000)
+      : swSeconds;
+    const entry = {
+      id: Date.now(),
+      date: new Date().toISOString().slice(0,10),
+      week, day,
+      label: PROGRAM[week]?.[day]?.label || "",
+      duration,
+      volume: calcDayVolume(week, day, weights, done, PROGRAM),
+    };
+    setWorkoutLog(p => [entry, ...p]);
+    swAccumRef.current = 0;
+    setSwRunning(false); setSwSeconds(0); setSwPaused(false);
+  }
+
+  function stopWorkout() {
+    swAccumRef.current = 0;
+    setSwRunning(false); setSwSeconds(0); setSwPaused(false);
+  }
+
+  // Rest timer tick — rAF reads how many seconds remain from wall-clock
+  function startTimer(seconds) {
+    cancelAnimationFrame(timerRafRef.current);
+    timerEndRef.current = Date.now() + seconds * 1000;
+    setTimerTotal(seconds);
+    setTimerSec(seconds);
+
+    function tick() {
+      const remaining = Math.max(0, Math.ceil((timerEndRef.current - Date.now()) / 1000));
+      setTimerSec(remaining);
+      if (remaining > 0) {
+        timerRafRef.current = requestAnimationFrame(tick);
+      }
+    }
+    timerRafRef.current = requestAnimationFrame(tick);
+  }
+
+  function dismissTimer() {
+    cancelAnimationFrame(timerRafRef.current);
+    setTimerSec(null);
+  }
 
   // ── RPE calculator ──
   const [rpeWeight, setRpeWeight] = useState("");
@@ -710,45 +787,10 @@ export default function App() {
   useEffect(() => { try { localStorage.setItem("cb_measurements", JSON.stringify(measurements)); } catch {} }, [measurements]);
   useEffect(() => { setMaxInp({ squat: maxes.squat||"", bench: maxes.bench||"", deadlift: maxes.deadlift||"" }); }, [maxes]);
 
-  // ── Stopwatch logic ──
-  useEffect(() => {
-    if (swRunning) {
-      swRef.current = setInterval(() => setSwSeconds(s => s + 1), 1000);
-    } else {
-      clearInterval(swRef.current);
-    }
-    return () => clearInterval(swRef.current);
-  }, [swRunning]);
-
-  function startWorkout() { setSwSeconds(0); setSwRunning(true); setSwPaused(false); }
-  function pauseWorkout()  { setSwRunning(false); setSwPaused(true); }
-  function resumeWorkout() { setSwRunning(true); setSwPaused(false); }
-
-  function saveWorkout() {
-    const entry = {
-      id: Date.now(),
-      date: new Date().toISOString().slice(0,10),
-      week, day,
-      label: PROGRAM[week]?.[day]?.label || "",
-      duration: swSeconds,
-      volume: calcDayVolume(week, day, weights, done, PROGRAM),
-    };
-    setWorkoutLog(p => [entry, ...p]);
-    setSwRunning(false); setSwSeconds(0); setSwPaused(false);
-  }
-
-  function stopWorkout() { setSwRunning(false); setSwSeconds(0); setSwPaused(false); }
-
-  // ── Rest timer ──
-  function startTimer(seconds) {
-    clearInterval(timerRef.current);
-    setTimerTotal(seconds); setTimerSec(seconds);
-    timerRef.current = setInterval(() => {
-      setTimerSec(prev => { if (prev <= 1) { clearInterval(timerRef.current); return 0; } return prev - 1; });
-    }, 1000);
-  }
-  function dismissTimer() { clearInterval(timerRef.current); setTimerSec(null); }
-  useEffect(() => () => { clearInterval(timerRef.current); clearInterval(swRef.current); }, []);
+  useEffect(() => () => {
+    cancelAnimationFrame(swRafRef.current);
+    cancelAnimationFrame(timerRafRef.current);
+  }, []);
 
   // ── Session data ──
   const session   = PROGRAM[week]?.[day];
