@@ -489,19 +489,39 @@ const PROGRAM = {
 
 // ─── RPE → %1RM TABLE (Epley-style, commonly used in powerlifting) ───────────
 // rpeTable[reps][rpe] = estimated % of 1RM
-const RPE_TABLE = {
-  1:  { 6: 0.783, 6.5: 0.800, 7: 0.817, 7.5: 0.833, 8: 0.850, 8.5: 0.867, 9: 0.883, 9.5: 0.900, 10: 0.917 },
-  2:  { 6: 0.750, 6.5: 0.767, 7: 0.783, 7.5: 0.800, 8: 0.817, 8.5: 0.833, 9: 0.850, 9.5: 0.867, 10: 0.883 },
-  3:  { 6: 0.717, 6.5: 0.733, 7: 0.750, 7.5: 0.767, 8: 0.783, 8.5: 0.800, 9: 0.817, 9.5: 0.833, 10: 0.850 },
-  4:  { 6: 0.683, 6.5: 0.700, 7: 0.717, 7.5: 0.733, 8: 0.750, 8.5: 0.767, 9: 0.783, 9.5: 0.800, 10: 0.817 },
-  5:  { 6: 0.650, 6.5: 0.667, 7: 0.683, 7.5: 0.700, 8: 0.717, 8.5: 0.733, 9: 0.750, 9.5: 0.767, 10: 0.783 },
-  6:  { 6: 0.617, 6.5: 0.633, 7: 0.650, 7.5: 0.667, 8: 0.683, 8.5: 0.700, 9: 0.717, 9.5: 0.733, 10: 0.750 },
-  7:  { 6: 0.583, 6.5: 0.600, 7: 0.617, 7.5: 0.633, 8: 0.650, 8.5: 0.667, 9: 0.683, 9.5: 0.700, 10: 0.717 },
-  8:  { 6: 0.550, 6.5: 0.567, 7: 0.583, 7.5: 0.600, 8: 0.617, 8.5: 0.633, 9: 0.650, 9.5: 0.667, 10: 0.683 },
-  9:  { 6: 0.517, 6.5: 0.533, 7: 0.550, 7.5: 0.567, 8: 0.583, 8.5: 0.600, 9: 0.617, 9.5: 0.633, 10: 0.650 },
-  10: { 6: 0.483, 6.5: 0.500, 7: 0.517, 7.5: 0.533, 8: 0.550, 8.5: 0.567, 9: 0.583, 9.5: 0.600, 10: 0.617 },
-  12: { 6: 0.450, 6.5: 0.467, 7: 0.483, 7.5: 0.500, 8: 0.517, 8.5: 0.533, 9: 0.550, 9.5: 0.567, 10: 0.583 },
-};
+// ── Brzycki Formula for 1RM estimation (more accurate than Epley) ──
+// 1RM = weight × (36 / (37 - reps))
+// Works best for reps 1-10, still reasonable up to 15 reps
+function brzycki1RM(weight, reps) {
+  if (reps < 1) return weight;
+  if (reps === 1) return weight;
+  const r = Math.min(reps, 15); // Cap at 15 reps for formula accuracy
+  return weight * (36 / (37 - r));
+}
+
+// RPE to Reps in Reserve (RIR) conversion
+// 10 RPE = 0 RIR (max effort), 9 RPE = 1 RIR, etc.
+function rpeToRIR(rpe) {
+  return Math.max(0, 10 - rpe);
+}
+
+// Estimate 1RM from weight + reps + RPE using Brzycki
+function estimate1RM(weight, reps, rpe) {
+  const r = Math.max(1, reps);
+  const repsAtRPE = r + rpeToRIR(rpe);
+  const capped = Math.min(repsAtRPE, 15);
+  return Math.round(brzycki1RM(weight, capped));
+}
+
+// Given a 1RM and target RPE, calculate the weight for a given rep range
+function weightForRPE(oneRM, reps, rpe) {
+  const r = Math.max(1, reps);
+  const rir = rpeToRIR(rpe);
+  const repsAtRPE = r + rir;
+  const capped = Math.min(repsAtRPE, 15);
+  // Reverse Brzycki: weight = 1RM / (36 / (37 - reps))
+  return Math.round(oneRM / (36 / (37 - capped)));
+}
 
 const PHASES = {
   "1-4":   { label: "ACCUMULATION",     color: "#60a5fa" },
@@ -536,24 +556,6 @@ function fmtRest(r) {
   const s = parseInt(r);
   if (isNaN(s)) return null;
   return s >= 60 ? `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}` : `${s}s`;
-}
-
-// Estimate 1RM from weight + reps + RPE
-function estimate1RM(weight, reps, rpe) {
-  const row = RPE_TABLE[reps] || RPE_TABLE[Math.min(12, Math.max(1, reps))];
-  if (!row) return null;
-  const pct = row[rpe];
-  if (!pct) return null;
-  return Math.round(weight / pct);
-}
-
-// Given a 1RM, what weight for target reps @ target RPE?
-function weightForRPE(oneRM, reps, rpe) {
-  const row = RPE_TABLE[reps] || RPE_TABLE[Math.min(12, Math.max(1, reps))];
-  if (!row) return null;
-  const pct = row[rpe];
-  if (!pct) return null;
-  return Math.round(oneRM * pct);
 }
 
 // ─── STYLES ─────────────────────────────────────────────────────────────────
@@ -861,6 +863,71 @@ export default function App() {
     setSwRunning(false); setSwSeconds(0); setSwPaused(false);
   }
 
+  // ── Export / Import ──
+  const [importText, setImportText]     = useState("");
+  const [importStatus, setImportStatus] = useState(null); // "ok" | "error" | null
+
+  const DATA_KEYS = [
+    "cb_maxes","cb_to5","cb_done","cb_weights","cb_notes",
+    "cb_rpe_logged","cb_workout_log","cb_comp_date",
+    "cb_body_weight","cb_measurements",
+  ];
+
+  function exportData() {
+    const snapshot = {};
+    DATA_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v !== null) snapshot[k] = v; });
+    snapshot.__exported = new Date().toISOString();
+    snapshot.__version  = "1";
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `cb16-backup-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importData() {
+    try {
+      const parsed = JSON.parse(importText.trim());
+      // Validate: must have at least one known key
+      const validKeys = DATA_KEYS.filter(k => k in parsed);
+      if (validKeys.length === 0) { setImportStatus("error"); return; }
+
+      // Write each key to localStorage and update React state
+      validKeys.forEach(k => localStorage.setItem(k, parsed[k]));
+
+      // Sync all React state from the newly written localStorage values
+      const safe = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)||"null") ?? fallback; } catch { return fallback; } };
+      setMaxes(safe("cb_maxes", {}));
+      setTo5(safe("cb_to5", true));
+      setDone(safe("cb_done", {}));
+      setWeights(safe("cb_weights", {}));
+      setNotes(safe("cb_notes", {}));
+      setRpeLogged(safe("cb_rpe_logged", {}));
+      setWorkoutLog(safe("cb_workout_log", []));
+      setBodyWeight(safe("cb_body_weight", []));
+      setMeasurements(safe("cb_measurements", []));
+      const cd = localStorage.getItem("cb_comp_date") || "";
+      setCompDate(cd);
+      setCompDateInput(cd);
+
+      setImportText("");
+      setImportStatus("ok");
+    } catch {
+      setImportStatus("error");
+    }
+  }
+
+  function handleImportFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = evt => setImportText(evt.target.result);
+    reader.readAsText(file);
+    e.target.value = ""; // reset so same file can be re-selected
+  }
+
   function saveBodyWeight() {
     const v = parseFloat(bwInput);
     // Sanity bounds: must be between 50 and 1500 lbs
@@ -905,7 +972,7 @@ export default function App() {
         backgroundImage:`linear-gradient(${C.border} 1px,transparent 1px),linear-gradient(90deg,${C.border} 1px,transparent 1px)`,
         backgroundSize:"48px 48px", opacity:0.4 }} />
 
-      <div style={{ position:"relative", zIndex:1, maxWidth:540, margin:"0 auto", padding:"0 16px 100px" }}>
+      <div style={{ position:"relative", zIndex:1, maxWidth:600, margin:"0 auto", padding:"0 12px 100px" }}>
 
         {/* ── REST TIMER PILL ── */}
         {timerSec !== null && (
@@ -1003,15 +1070,16 @@ export default function App() {
         </div>
 
         {/* ── NAV TABS ── */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:6, paddingTop:14, paddingBottom:4 }}>
-          {[["workout","📋"],["maxes","⚡"],["rpe","🧮"],["calendar","📅"],["metrics","📊"]].map(([t,icon]) => (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:6, paddingTop:14, paddingBottom:8 }}>
+          {[["workout","📋"],["maxes","⚡"],["rpe","🧮"],["calendar","📅"],["metrics","📊"],["data","💾"]].map(([t,icon]) => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: tab===t ? C.accent : C.surface,
               border:`2px solid ${tab===t ? C.accent : C.border}`,
               color: tab===t ? "#0e0e14" : C.muted,
-              borderRadius:10, padding:"12px 0", fontSize:10, fontWeight:700,
+              borderRadius:10, padding:"14px 0", fontSize:10, fontWeight:700,
               cursor:"pointer", fontFamily:"inherit", transition:"all 0.15s",
-            }}>{icon}<div style={{ fontSize:8, marginTop:2, letterSpacing:"0.05em" }}>{t.toUpperCase()}</div></button>
+              minHeight:60, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+            }}>{icon}<div style={{ fontSize:8, marginTop:3, letterSpacing:"0.05em" }}>{t.toUpperCase()}</div></button>
           ))}
         </div>
 
@@ -1222,12 +1290,13 @@ export default function App() {
                         const chk=done[k];
                         return (
                           <button key={si} onClick={()=>toggleSet(ei,si)} style={{
-                            width:48, height:48, borderRadius:10,
+                            minWidth:48, minHeight:48, width:48, height:48, borderRadius:10,
                             border:`2px solid ${chk?C.accent:C.border}`,
                             background:chk?`${C.accent}20`:C.bg,
                             color:chk?C.accent:C.muted,
                             fontSize:chk?18:14, fontWeight:700,
                             cursor:"pointer", fontFamily:"inherit", transition:"all 0.12s",
+                            display:"flex", alignItems:"center", justifyContent:"center",
                           }}>{chk?"✓":si+1}</button>
                         );
                       })}
@@ -1631,6 +1700,121 @@ export default function App() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════
+            TAB: DATA
+        ══════════════════════════════════════ */}
+        {tab==="data"&&(
+          <div style={{ paddingTop:24 }}>
+            <div style={{ fontSize:12, color:C.accent, letterSpacing:"0.16em", fontWeight:700, marginBottom:6 }}>DATA BACKUP</div>
+            <p style={{ fontSize:12, color:C.muted, margin:"0 0 24px", lineHeight:1.7 }}>
+              Export all your data before updating the app, then import it after to restore everything.
+            </p>
+
+            {/* Export */}
+            <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, padding:"18px", marginBottom:16 }}>
+              <div style={{ fontSize:12, color:C.accent, fontWeight:700, letterSpacing:"0.1em", marginBottom:8 }}>📤 EXPORT</div>
+              <p style={{ fontSize:12, color:C.muted, margin:"0 0 14px", lineHeight:1.6 }}>
+                Downloads a <code style={{ color:C.text, background:"rgba(255,255,255,0.08)", padding:"1px 5px", borderRadius:4 }}>.json</code> backup file containing all your workouts, weights, notes, RPE logs, body metrics, measurements, training maxes, and competition date.
+              </p>
+              <button onClick={exportData} style={{
+                width:"100%", padding:"16px 0", background:C.accent, border:"none", color:C.bg,
+                borderRadius:10, fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit",
+                letterSpacing:"0.06em",
+              }}>⬇ DOWNLOAD BACKUP</button>
+            </div>
+
+            {/* Import */}
+            <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, padding:"18px", marginBottom:16 }}>
+              <div style={{ fontSize:12, color:C.blue, fontWeight:700, letterSpacing:"0.1em", marginBottom:8 }}>📥 IMPORT</div>
+              <p style={{ fontSize:12, color:C.muted, margin:"0 0 14px", lineHeight:1.6 }}>
+                Select a backup file or paste its contents below to restore your data.
+              </p>
+
+              {/* File picker */}
+              <label style={{
+                display:"block", width:"100%", boxSizing:"border-box",
+                padding:"14px 0", background:`${C.blue}18`,
+                border:`2px dashed ${C.blue}50`, borderRadius:10,
+                textAlign:"center", fontSize:13, fontWeight:700, color:C.blue,
+                cursor:"pointer", marginBottom:12,
+              }}>
+                📂 CHOOSE BACKUP FILE
+                <input type="file" accept=".json,application/json"
+                  onChange={handleImportFile}
+                  style={{ display:"none" }} />
+              </label>
+
+              <div style={{ fontSize:10, color:C.dim, textAlign:"center", marginBottom:10 }}>— OR PASTE JSON BELOW —</div>
+
+              <textarea
+                placeholder='Paste backup JSON here…'
+                value={importText}
+                onChange={e => { setImportText(e.target.value); setImportStatus(null); }}
+                rows={5}
+                style={{
+                  width:"100%", boxSizing:"border-box",
+                  background:C.bg, border:`1px solid ${importStatus==="error" ? C.red+"80" : importText ? C.blue+"50" : C.border}`,
+                  color:C.muted, padding:"12px 14px", borderRadius:10,
+                  fontSize:12, fontFamily:"inherit", outline:"none",
+                  resize:"vertical", lineHeight:1.5, marginBottom:12,
+                }}
+              />
+
+              {importStatus==="ok" && (
+                <div style={{ padding:"12px 14px", background:`${C.accent}15`,
+                  border:`1px solid ${C.accent}50`, borderRadius:8,
+                  fontSize:13, fontWeight:700, color:C.accent, marginBottom:12, textAlign:"center" }}>
+                  ✅ Data restored successfully!
+                </div>
+              )}
+              {importStatus==="error" && (
+                <div style={{ padding:"12px 14px", background:`${C.red}12`,
+                  border:`1px solid ${C.red}50`, borderRadius:8,
+                  fontSize:13, fontWeight:700, color:C.red, marginBottom:12, textAlign:"center" }}>
+                  ❌ Invalid backup file. Make sure it's a file exported from this app.
+                </div>
+              )}
+
+              <button
+                onClick={importData}
+                disabled={!importText.trim()}
+                style={{
+                  width:"100%", padding:"16px 0",
+                  background: importText.trim() ? C.blue : "transparent",
+                  border:`2px solid ${importText.trim() ? C.blue : C.border}`,
+                  color: importText.trim() ? C.bg : C.dim,
+                  borderRadius:10, fontSize:14, fontWeight:700,
+                  cursor: importText.trim() ? "pointer" : "not-allowed",
+                  fontFamily:"inherit", letterSpacing:"0.06em",
+                  transition:"all 0.15s",
+                }}>⬆ RESTORE FROM BACKUP</button>
+            </div>
+
+            {/* What's included */}
+            <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, padding:"16px" }}>
+              <div style={{ fontSize:10, color:C.muted, fontWeight:700, letterSpacing:"0.12em", marginBottom:12 }}>WHAT'S INCLUDED IN BACKUP</div>
+              {[
+                ["⚡","Training maxes (squat, bench, deadlift)"],
+                ["✅","Completed sets across all 16 weeks"],
+                ["🏋️","Weight used for every exercise"],
+                ["🎯","Perceived RPE logs"],
+                ["📝","Exercise notes"],
+                ["📋","Saved workout history"],
+                ["🏆","Competition date"],
+                ["⚖️","Body weight log"],
+                ["📏","All body measurements"],
+                ["⚙️","App settings (weight rounding)"],
+              ].map(([icon, label]) => (
+                <div key={label} style={{ display:"flex", alignItems:"center", gap:10,
+                  padding:"8px 0", borderBottom:`1px solid ${C.border}`, fontSize:12 }}>
+                  <span style={{ fontSize:16, width:24, textAlign:"center" }}>{icon}</span>
+                  <span style={{ color:C.muted }}>{label}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
