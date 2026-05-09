@@ -2,13 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0e0e14" />
     <meta name="description" content="Calgary Barbell 16-Week Training Log" />
     <title>CB Training Log</title>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { background: #0e0e14; }
+      html, body, #root { width: 100%; height: 100%; }
+      /* Safe area insets for notch/dynamic island */
+      @supports (padding: max(0px)) {
+        body {
+          padding-left: max(12px, env(safe-area-inset-left));
+          padding-right: max(12px, env(safe-area-inset-right));
+          padding-top: max(0px, env(safe-area-inset-top));
+          padding-bottom: max(12px, env(safe-area-inset-bottom));
+        }
+      }
     </style>
   </head>
   <body>
