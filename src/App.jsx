@@ -830,7 +830,15 @@ export default function App() {
     const k = `${week}-${day}-${ei}-${si}`;
     const was = done[k];
     setDone(p => ({ ...p, [k]: !p[k] }));
-    if (!was) { const r = parseInt(exs[ei]?.rest)||0; if (r > 0) startTimer(r); }
+    if (!was) {
+      // Auto-start stopwatch if it hasn't been started yet
+      if (!swRunning && !swPaused && swSeconds === 0) {
+        startWorkout();
+      }
+      // Start rest timer
+      const r = parseInt(exs[ei]?.rest)||0;
+      if (r > 0) startTimer(r);
+    }
   }
   function setExWeight(ei, val) { setWeights(p => ({ ...p, [`${week}-${day}-${ei}`]: val })); }
   function getExWeight(ei)      { return weights[`${week}-${day}-${ei}`] || ""; }
