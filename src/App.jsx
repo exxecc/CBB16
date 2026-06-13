@@ -634,6 +634,39 @@ function fmtVol(v) {
   return String(v);
 }
 
+// ── Plate counter (assumes 45 lb bar) ──
+const PLATE_SIZES = [45, 25, 10, 5, 2.5];
+
+function calcPlates(totalWeight) {
+  const w = parseFloat(totalWeight);
+  if (isNaN(w) || w <= 45) return null; // Less than or equal to bar alone
+  
+  const perSide = (w - 45) / 2; // 45 = bar weight
+  const plates = {};
+  let remaining = perSide;
+  
+  for (const size of PLATE_SIZES) {
+    const count = Math.floor(remaining / size);
+    if (count > 0) {
+      plates[size] = count;
+      remaining -= count * size;
+    }
+  }
+  
+  // Check if there's rounding error
+  if (Math.abs(remaining) > 0.01) return null; // Can't make this weight
+  
+  return plates;
+}
+
+function fmtPlates(plates) {
+  if (!plates) return null;
+  const strs = Object.entries(plates)
+    .sort(([a], [b]) => parseFloat(b) - parseFloat(a))
+    .map(([size, count]) => `${count}×${size}`);
+  return strs.join(" + ");
+}
+
 // ─── HELPERS: completion checks ─────────────────────────────────────────────
 function isDayComplete(w, d, doneMap) {
   const exs = PROGRAM[w]?.[d]?.exercises || [];
@@ -1260,6 +1293,17 @@ export default function App() {
                       </span>
                     )}
                   </div>
+
+                  {/* Plate counter */}
+                  {loggedW && calcPlates(loggedW) && (
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12, padding:"8px 12px",
+                      background:`${C.blue}0a`, border:`1px solid ${C.blue}40`, borderRadius:8 }}>
+                      <div style={{ fontSize:9, color:C.dim, letterSpacing:"0.1em", whiteSpace:"nowrap" }}>PER SIDE:</div>
+                      <div style={{ fontSize:12, fontWeight:700, color:C.blue, flexGrow:1 }}>
+                        {fmtPlates(calcPlates(loggedW))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Perceived RPE */}
                   <div style={{ marginBottom:12 }}>
