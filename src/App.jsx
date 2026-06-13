@@ -635,7 +635,7 @@ function fmtVol(v) {
 }
 
 // ── Plate counter (assumes 45 lb bar) ──
-const PLATE_SIZES = [45, 35, 25, 15, 10, 5, 2.5];
+const PLATE_SIZES = [45, 25, 10, 5, 2.5];
 
 function calcPlates(totalWeight) {
   const w = parseFloat(totalWeight);
